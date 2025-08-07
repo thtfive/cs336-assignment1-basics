@@ -26,9 +26,57 @@ class TransformerBlock(nn.Module):
         return x + self.ffn(self.ln2(x))
 
 
+class TransformerLM(nn.Module):
+    def __init__(
+        self, 
+        vocab_size: int,
+        context_length: int,
+        d_model: int,
+        num_layers: int,
+        num_heads: int,
+        d_ff: int,
+        rope_theta: float
+    ):
+        super().__init__()
+        self.token_embeddings = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+        self.layers = nn.ModuleList(
+            [TransformerBlock(
+                d_model=d_model,
+                n_heads=num_heads,
+                d_ff=d_ff,
+                theta=rope_theta,
+                max_seq_len=context_length
+                ) for _ in range(num_layers)
+            ]
+        )
+        self.ln_final = RMSNorm(d_model=d_model)
+        self.lm_head = Linear(in_features=d_model, out_features=vocab_size)
+
+
+    def forward(self, in_indices: Int[Tensor, " batch_size sequence_length"]):
+        x = self.token_embeddings(in_indices)
+        for layer in self.layers:
+            x = layer(x)
+        x = self.ln_final(x)
+        x = self.lm_head(x)
+        return x
+
 
 if __name__=="__main__":
-    model = TransformerBlock(d_model=512, n_heads=8, d_ff=2048, theta=10000, max_seq_len=2048)
-    # test the parameter names
+    # model = TransformerBlock(d_model=512, n_heads=8, d_ff=2048, theta=10000, max_seq_len=2048)
+    # # test the parameter names
+    # for name, param in model.named_parameters():
+    #     print(name)
+    
+    # test the parameter names for TransformLM
+    model = TransformerLM(
+        vocab_size=1000,
+        context_length=1024,
+        d_model=512,
+        num_layers=12,
+        num_heads=8,
+        d_ff=2048, 
+        rope_theta=10000
+    )
     for name, param in model.named_parameters():
         print(name)
