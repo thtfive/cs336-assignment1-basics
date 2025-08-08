@@ -62,6 +62,44 @@ class TransformerLM(nn.Module):
         return x
 
 
+def transformer_accounting(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta):
+    # params num:
+    #   token_embeddings: vocab_size*d_model
+    #   48 * transformer_block:
+    #     RMSNorm: 2 * d_model
+    #     Q\K\V\O: 4*d_model*d_model
+    #     FFN: 3*d_model*d_ff
+    #  ln_final: d_model
+    #  lm_head: d_model*vocab_size
+    print(f"{'token_embeddings':40} shape:[{vocab_size}, {d_model}], params:{vocab_size*d_model}")
+    print("each transformer block:")
+    print(f"{'  2 RMSNorm':40} each shape:[{d_model}], params:{d_model}")
+    print(f"{'  3 projs':40} each shape:[{d_model}, {d_model}], params:{d_model*d_model}")
+    print(f"{'  3 FFN':40} each shape:[{d_model}, {d_ff}], params:{d_model*d_ff}")
+    print(f"{'layer norm':40} shape:[{d_model}], params:{d_model}")
+    print(f"{'lm_head':40} shape:[{d_model}, {vocab_size}], params:{d_model*vocab_size}")
+    total = vocab_size*d_model + 48 * (2*d_model + 4*d_model*d_model + 3*d_model*d_ff) + d_model + d_model*vocab_size
+    print(f"{'total':40} params:{total}")
+    print("="*80)
+
+    model = TransformerLM(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        d_model=d_model,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        d_ff=d_ff, 
+        rope_theta=rope_theta
+    )
+    
+    for name, param in model.named_parameters():
+        if name.startswith("layers") and not name.startswith("layers.0"):
+            continue
+        print(f"{name:40} shape: {list(param.shape)}\t params: {param.numel()}")
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total parameters: {total_params}")
+
+
 if __name__=="__main__":
     # model = TransformerBlock(d_model=512, n_heads=8, d_ff=2048, theta=10000, max_seq_len=2048)
     # # test the parameter names
@@ -69,14 +107,24 @@ if __name__=="__main__":
     #     print(name)
     
     # test the parameter names for TransformLM
-    model = TransformerLM(
-        vocab_size=1000,
+    # model = TransformerLM(
+    #     vocab_size=1000,
+    #     context_length=1024,
+    #     d_model=512,
+    #     num_layers=12,
+    #     num_heads=8,
+    #     d_ff=2048, 
+    #     rope_theta=10000
+    # )
+    # for name, param in model.named_parameters():
+    #     print(name)
+
+    transformer_accounting(
+        vocab_size=50257,
         context_length=1024,
-        d_model=512,
-        num_layers=12,
-        num_heads=8,
-        d_ff=2048, 
+        d_model=1600,
+        num_layers=48,
+        num_heads=25,
+        d_ff=6400,
         rope_theta=10000
     )
-    for name, param in model.named_parameters():
-        print(name)
