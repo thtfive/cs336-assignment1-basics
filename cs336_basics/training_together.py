@@ -1,8 +1,15 @@
 import torch
 from torch import nn
-from cs336_basics.transformer import TransformerLM
 import argparse
+import json
+import numpy as np
 
+from cs336_basics.transformer import TransformerLM
+from cs336_basics.logsetup import init_logger, get_logger
+from cs336_basics.tokenizer import Tokenizer
+from cs336_basics.data_loading import get_batch
+from cs336_basics.adamw import AdamW
+from cs336_basics.cross_entropy import cross_entropy
 
 def parse_args():
     # parse parameters
@@ -17,12 +24,33 @@ def parse_args():
     parser.add_argument("--d_ff", type=int, default=2048)
     parser.add_argument("--rope_theta", type=float, default=10000.0)
 
+    # Tokenizer parameters
+    parser.add_argument("--vocab_filepath", type=str, default="data/owt-vocab.txt")
+    parser.add_argument("--merges_filepath", type=str, default="data/owt-merges.txt")
+
+    # Training data
+    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--betas", type=tuple, default=(0.99, 0.999))
+    parser.add_argument("--eps", type=float, default=1e-8)
+    parser.add_argument("--weight_decay", type=float, default=0.01)
+
     # parse parameters
     params = parser.parse_args()
     return params
 
 
 def train(params):
+    tokenizer = Tokenizer.from_files(
+        vocab_filepath=params.vocab_filepath,
+        merges_filepath=params.merges_filepath,
+    )
+
+    logger.info("Vocab size: {}", len(tokenizer.vocab))
+    params.vocab_size = len(tokenizer.vocab)
+
+    # load model
     model = TransformerLM(
         vocab_size = params.vocab_size,
         context_length = params.context_length,
@@ -32,12 +60,53 @@ def train(params):
         d_ff = params.d_ff,
         rope_theta = params.rope_theta
     )
-    
 
+    # load training data
+    with open(params.train_filepath, mode="r", encoding="utf-8") as f:
+        text = ""
+        for line in f:
+            text += line
+    # do tokenizer to training data
+    token_ids = np.array(tokenizer.encode(text))
+    logger.info("First 500 chars of text: {}", text[:500])
+    logger.info("First 100 of token_ids: {}", token_ids[:100])
+
+
+    # training
+    optim = AdamW(
+        model.parameters(),
+        lr=params.lr,
+        betas=params.betas,
+        eps=params.eps,
+        weight_decay=params.weight_decay
+    )
+
+    for i in range(100):
+        x, targets = get_batch(token_ids, batch_size=params.batch_size, context_length = params.context_length, device="cpu")
+        
+        optim.zero_grad()
+        y = model(x)
+        loss = cross_entropy(y, targets)
+
+        loss.backward()
+        optim.step()
+        if i % 10 == 0:
+            logger.info("Step {i}, Loss:{loss:.4f}", i=i, loss=loss.item())
+
+    # save checkpoint
+
+def log_params(params):
+    # Convert Namespace -> dict
+    params_dict = vars(params)
+    logger.info("Parameters:\n{}", json.dumps(params_dict, indent=4))
 
 
 if __name__ == "__main__":
     params = parse_args()
+    init_logger(log_dir="logs", level="DEBUG")
+    logger = get_logger(__name__)
+    logger.info("Start training")
+    log_params(params)
     train(params)
 
 
