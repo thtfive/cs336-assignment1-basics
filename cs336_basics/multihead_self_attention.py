@@ -4,8 +4,7 @@ from jaxtyping import Float, Int
 from cs336_basics.rope import RotaryPositionEmbedding
 from cs336_basics.scaled_dot_product_attention import ScaledDotProductAttention
 from cs336_basics.linear import Linear
-from einops import rearrange
-    
+from einops import rearrange, repeat
 
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model: int, n_heads: int, theta: float | None = None, max_seq_len: int | None = None):
@@ -35,7 +34,7 @@ class MultiHeadSelfAttention(nn.Module):
         k_heads = rearrange(k, "batch seq (heads d) -> batch heads seq d", heads=self.n_heads)
         v_heads = rearrange(v, "batch seq (heads d) -> batch heads seq d", heads=self.n_heads)
 
-        
+        token_positions = repeat(token_positions, "batch_size seq -> batch_size heads seq", heads=self.n_heads)
         if self.rope is not None:
             q_heads = self.rope(q_heads, token_positions=token_positions)
             k_heads = self.rope(k_heads, token_positions=token_positions)
