@@ -26,6 +26,7 @@ class MultiHeadSelfAttention(nn.Module):
 
     def forward(self, x: Float[Tensor, "... seq_len d_model"], 
                 token_positions: Int[Tensor, "... seq_len"] | None = None) -> Float[Tensor, "... seq_len d_model"]:
+        device = x.device
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
@@ -39,7 +40,7 @@ class MultiHeadSelfAttention(nn.Module):
             q_heads = self.rope(q_heads, token_positions=token_positions)
             k_heads = self.rope(k_heads, token_positions=token_positions)
 
-        mask = torch.tril(torch.ones(1, 1, q.shape[-2], q.shape[-2])).bool()
+        mask = torch.tril(torch.ones(1, 1, q.shape[-2], q.shape[-2], device=device)).bool()
         o_heads = self.attn(Q=q_heads, K=k_heads, V=v_heads, mask=mask)
         o = rearrange(o_heads, "batch heads seq d -> batch seq (heads d)")
         return self.output_proj(o)

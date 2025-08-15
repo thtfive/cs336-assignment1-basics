@@ -17,11 +17,11 @@ def parse_args():
 
     # TransformLM model parameters
     parser.add_argument("--vocab_size", type=int, default=10000)
-    parser.add_argument("--context_length", type=int, default=512)
-    parser.add_argument("--d_model", type=int, default=512)
+    parser.add_argument("--context_length", type=int, default=128)
+    parser.add_argument("--d_model", type=int, default=256)
     parser.add_argument("--num_layers", type=int, default=12)
     parser.add_argument("--num_heads", type=int, default=8)
-    parser.add_argument("--d_ff", type=int, default=2048)
+    parser.add_argument("--d_ff", type=int, default=1024)
     parser.add_argument("--rope_theta", type=float, default=10000.0)
 
     # Tokenizer parameters
@@ -49,6 +49,7 @@ def train(params):
 
     logger.info("Vocab size: {}", len(tokenizer.vocab))
     params.vocab_size = len(tokenizer.vocab)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # load model
     model = TransformerLM(
@@ -60,6 +61,7 @@ def train(params):
         d_ff = params.d_ff,
         rope_theta = params.rope_theta
     )
+    model.to(device)
 
     # load training data
     with open(params.train_filepath, mode="r", encoding="utf-8") as f:
@@ -82,7 +84,7 @@ def train(params):
     )
 
     for i in range(100):
-        x, targets = get_batch(token_ids, batch_size=params.batch_size, context_length = params.context_length, device="cpu")
+        x, targets = get_batch(token_ids, batch_size=params.batch_size, context_length = params.context_length, device=device)
         
         optim.zero_grad()
         y = model(x)
