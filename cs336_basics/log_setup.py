@@ -1,4 +1,4 @@
-# logsetup.py
+# log_setup.py
 from __future__ import annotations
 from loguru import logger
 import logging
