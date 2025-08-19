@@ -10,6 +10,10 @@ def save_checkpoint(
     iteration: int,
     out: str | os.PathLike | BinaryIO | IO[bytes],
 ):
+    if isinstance(out, (str, os.PathLike)):
+        out = os.path.abspath(out)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+
     state_dict = {
         "model": model.state_dict(), 
         "optimizer": optimizer.state_dict(),

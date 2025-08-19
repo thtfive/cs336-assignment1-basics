@@ -5,11 +5,12 @@ import json
 import numpy as np
 
 from cs336_basics.transformer import TransformerLM
-from cs336_basics.logsetup import init_logger, get_logger
+from cs336_basics.log_setup import init_logger, get_logger
 from cs336_basics.tokenizer import Tokenizer
 from cs336_basics.data_loading import get_batch
 from cs336_basics.adamw import AdamW
 from cs336_basics.cross_entropy import cross_entropy
+from cs336_basics.checkpointing import save_checkpoint, load_checkpoint
 
 def parse_args():
     # parse parameters
@@ -36,9 +37,22 @@ def parse_args():
     parser.add_argument("--eps", type=float, default=1e-8)
     parser.add_argument("--weight_decay", type=float, default=0.01)
 
+    # checkpoints
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/")
+
     # parse parameters
     params = parser.parse_args()
     return params
+
+
+def save_training_checkpoint(model, optim, iteration, checkpoint_path):
+    save_checkpoint(
+        model=model,
+        optimizer=optim,
+        iteration=iteration,
+        out=checkpoint_path
+    )
+    logger.info("Save checkpoint to {path}", path=checkpoint_path)
 
 
 def train(params):
@@ -83,7 +97,9 @@ def train(params):
         weight_decay=params.weight_decay
     )
 
-    for i in range(100):
+    iteration = 0
+    for i in range(10000):
+        iteration = i
         x, targets = get_batch(token_ids, batch_size=params.batch_size, context_length = params.context_length, device=device)
         
         optim.zero_grad()
@@ -94,8 +110,25 @@ def train(params):
         optim.step()
         if i % 10 == 0:
             logger.info("Step {i}, Loss:{loss:.4f}", i=i, loss=loss.item())
+        if i % 1000 == 0:
+            checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=iteration)
+            save_training_checkpoint(
+                model=model,
+                optimizer=optim,
+                iteration=iteration,
+                out=checkpoint_path
+            )
+
 
     # save checkpoint
+    checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=100)
+    save_training_checkpoint(
+        model=model,
+        optimizer=optim,
+        iteration=iteration,
+        out=checkpoint_path
+    )
+
 
 def log_params(params):
     # Convert Namespace -> dict
