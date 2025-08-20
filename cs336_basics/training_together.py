@@ -3,6 +3,7 @@ from torch import nn
 import argparse
 import json
 import numpy as np
+from typing import Sequence
 
 from cs336_basics.transformer import TransformerLM
 from cs336_basics.log_setup import init_logger, get_logger
@@ -53,6 +54,70 @@ def save_training_checkpoint(model, optim, iteration, checkpoint_path):
         out=checkpoint_path
     )
     logger.info("Save checkpoint to {path}", path=checkpoint_path)
+
+
+def tokenize_data(params):
+    tokenizer = Tokenizer.from_files(
+        vocab_filepath=params.vocab_filepath,
+        merges_filepath=params.merges_filepath,
+        special_tokens=["<|endoftext|>"]
+    )
+
+    logger.info("Vocab size: {}", len(tokenizer.vocab))
+    params.vocab_size = len(tokenizer.vocab)
+    # load training data
+    with open(params.train_filepath, mode="r", encoding="utf-8") as f:
+        text = ""
+        for line in f:
+            text += line
+
+    EOT_TEXT = "<|endoftext|>"
+    logger.info("EOT_TEXT: {}", EOT_TEXT)
+    EOT_ID = tokenizer.encode(EOT_TEXT)
+    logger.info("EOT_ID: {}", EOT_ID)
+    assert EOT_TEXT == tokenizer.decode(EOT_ID), "EOT_TEXT {EOT_TEXT} is not valid"
+    # do tokenizer to training data
+    token_ids = np.array(tokenizer.encode(text))
+    
+
+
+def make_batches_by_docs(
+    token_ids: Sequence[int],
+    eot_id: int,
+    batch_size: int,
+    context_length: int,
+    device: str = "cpu",
+):
+    data = torch.as_tensor(token_ids, dtype=torch.long)
+
+    # 1) Split documents by eot (discard empty documents)
+    docs = []
+    start = 0
+    for i, tid in enumerate(data):
+        if tid == eot_id:
+            if i - start > 0:
+                docs.append(data[start:i])  # [start, i), excluding eot
+            start = i + 1
+    if start < len(data):
+        docs.append(data[start:])
+
+    # 2) Keep only documents that can produce at least one window
+    docs = [d for d in docs if len(d) >= context_length + 1]
+    assert len(docs) > 0, "No document is long enough for a training window."
+
+    # 3) Randomly sample start positions within documents
+    xs, ys = [], []
+    for _ in range(batch_size):
+        d = docs[np.random.randint(0, len(docs))]
+        s = np.random.randint(0, len(d) - context_length)
+        x = d[s:s+context_length]
+        y = d[s+1:s+context_length+1]
+        xs.append(x)
+        ys.append(y)
+
+    x = torch.stack(xs).to(device)
+    y = torch.stack(ys).to(device)
+    return x, y
 
 
 def train(params):
@@ -142,6 +207,7 @@ if __name__ == "__main__":
     logger = get_logger(__name__)
     logger.info("Start training")
     log_params(params)
-    train(params)
+    # train(params)
+    tokenize_data(params=params)
 
 
