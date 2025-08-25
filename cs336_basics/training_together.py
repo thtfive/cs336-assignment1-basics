@@ -21,7 +21,7 @@ def parse_args():
 
     # TransformLM model parameters
     parser.add_argument("--vocab_size", type=int, default=10000)
-    parser.add_argument("--context_length", type=int, default=6)
+    parser.add_argument("--context_length", type=int, default=64)
     parser.add_argument("--d_model", type=int, default=256)
     parser.add_argument("--num_layers", type=int, default=12)
     parser.add_argument("--num_heads", type=int, default=8)
@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--eot_text", type=str, default="<|endoftext|>")
 
     # Data 
-    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid-tiny.txt")
+    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
     parser.add_argument("--preprocessing", type=bool, default=True)
     parser.add_argument("--dataset_path", type=str, default="cache/train_dataset.pth")
     
