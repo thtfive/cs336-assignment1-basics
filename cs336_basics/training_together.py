@@ -12,7 +12,8 @@ from cs336_basics.data_loading import get_batch
 from cs336_basics.adamw import AdamW
 from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.checkpointing import save_checkpoint, load_checkpoint
-from cs336_basics.data_loader import TrainingDataSet
+from cs336_basics.data_loader import TrainingDataSet, build_or_load
+from torch.utils.data import Dataset, DataLoader
 
 def parse_args():
     # parse parameters
@@ -20,7 +21,7 @@ def parse_args():
 
     # TransformLM model parameters
     parser.add_argument("--vocab_size", type=int, default=10000)
-    parser.add_argument("--context_length", type=int, default=128)
+    parser.add_argument("--context_length", type=int, default=6)
     parser.add_argument("--d_model", type=int, default=256)
     parser.add_argument("--num_layers", type=int, default=12)
     parser.add_argument("--num_heads", type=int, default=8)
@@ -33,8 +34,9 @@ def parse_args():
     parser.add_argument("--eot_text", type=str, default="<|endoftext|>")
 
     # Data 
-    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
+    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid-tiny.txt")
     parser.add_argument("--preprocessing", type=bool, default=True)
+    parser.add_argument("--dataset_path", type=str, default="cache/train_dataset.pth")
     
     # Training parameters
     parser.add_argument("--batch_size", type=int, default=64)
@@ -61,8 +63,6 @@ def save_training_checkpoint(model, optim, iteration, checkpoint_path):
     logger.info("Save checkpoint to {path}", path=checkpoint_path)
 
 
-
-
 def train(params):
     tokenizer = Tokenizer.from_files(
         vocab_filepath=params.vocab_filepath,
@@ -86,15 +86,16 @@ def train(params):
     model.to(device)
 
     # load training data
-    with open(params.train_filepath, mode="r", encoding="utf-8") as f:
-        text = ""
-        for line in f:
-            text += line
-    # do tokenizer to training data
-    token_ids = np.array(tokenizer.encode(text))
-    logger.info("First 500 chars of text: {}", text[:500])
-    logger.info("First 100 of token_ids: {}", token_ids[:100])
-
+    train_dataset = build_or_load(
+        pth_path=params.dataset_path,
+        vocab_filepath=params.vocab_filepath,
+        merges_filepath=params.merges_filepath,
+        train_filepath=params.train_filepath,
+        eot_text=params.eot_text,
+        context_length=params.context_length,
+        device=device
+    )
+    loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=2)
 
     # training
     optim = AdamW(
@@ -108,10 +109,12 @@ def train(params):
     iteration = 0
     for i in range(10000):
         iteration = i
-        x, targets = get_batch(token_ids, batch_size=params.batch_size, context_length = params.context_length, device=device)
+        x, targets = next(iter(loader))
         
         optim.zero_grad()
         y = model(x)
+        print("y device: ", y.device)
+        print("targets device: ", targets.device)
         loss = cross_entropy(y, targets)
 
         loss.backward()
@@ -150,7 +153,6 @@ if __name__ == "__main__":
     logger = get_logger(__name__)
     logger.info("Start training")
     log_params(params)
-    # train(params)
-    dataset = TrainingDataSet(params)
+    train(params)
 
 

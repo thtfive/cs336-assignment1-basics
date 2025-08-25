@@ -19,11 +19,10 @@ class TrainingDataSet(Dataset):
         *,
         save_path: Optional[str] = None,
         load_path: Optional[str] = None,
-        device: str = "cpu",
         force_rebuild: bool = False,
     ):
         if load_path and not force_rebuild and os.path.isfile(load_path):
-            ds = self.load(load_path, map_location=device)
+            ds = self.load(load_path)
             self._adopt(ds)
             return
 
@@ -99,7 +98,7 @@ class TrainingDataSet(Dataset):
         self,
         token_ids: Sequence[int],
     ):
-        data = torch.as_tensor(token_ids, dtype=torch.long)
+        data = torch.as_tensor(token_ids, dtype=torch.long) # CPU
 
         positions = []
         start = 0
@@ -113,7 +112,7 @@ class TrainingDataSet(Dataset):
         if len(positions) == 0:
             raise ValueError("No valid positions. Check that documents are long enough for the context_length.")
     
-        return torch.as_tensor(positions, dtype=torch.long, device=data.device)
+        return torch.as_tensor(positions, dtype=torch.long)
 
 
     def to_state(self) -> Dict[str, Any]:
@@ -146,11 +145,11 @@ class TrainingDataSet(Dataset):
 
 
     @classmethod
-    def load(cls, path: str, map_location: str = "cpu") -> "TrainingDataSet":
-        state = torch.load(path, map_location=map_location)
+    def load(cls, path: str) -> "TrainingDataSet":
+        state = torch.load(path, map_location="cpu")
         for k in ("token_ids", "positions"):
             if isinstance(state.get(k), torch.Tensor):
-                state[k] = state[k].to(map_location)
+                state[k] = state[k].to("cpu")
         ds = cls.from_state(state)
         logger.info("Dataset loaded from {}", os.path.abspath(path))
         return ds
@@ -176,7 +175,7 @@ def build_or_load(
     force_rebuild: bool = False,
 ) -> TrainingDataSet:
     if (not force_rebuild) and os.path.isfile(pth_path):
-        return TrainingDataSet(load_path=pth_path, device=device)
+        return TrainingDataSet(load_path=pth_path)
     return TrainingDataSet(
         vocab_filepath=vocab_filepath,
         merges_filepath=merges_filepath,
@@ -184,7 +183,6 @@ def build_or_load(
         eot_text=eot_text,
         context_length=context_length,
         save_path=pth_path,
-        device=device,
         force_rebuild=force_rebuild,
     )
 
@@ -219,7 +217,7 @@ def test_dataset():
         y_text = tokenizer.decode(y)
         print("x_text: ", x_text)
         print("y_text: ", y_text)
-        print('-'*80)
+        print('-' * 80)
     
     # second time: directly load from .pth
     dataset2 = TrainingDataSet(load_path=dataset_path, device="cpu")
