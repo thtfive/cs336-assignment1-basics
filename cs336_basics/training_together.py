@@ -12,6 +12,7 @@ from cs336_basics.data_loading import get_batch
 from cs336_basics.adamw import AdamW
 from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.checkpointing import save_checkpoint, load_checkpoint
+from cs336_basics.data_loader import TrainingDataSet
 
 def parse_args():
     # parse parameters
@@ -29,9 +30,13 @@ def parse_args():
     # Tokenizer parameters
     parser.add_argument("--vocab_filepath", type=str, default="data/owt-vocab.txt")
     parser.add_argument("--merges_filepath", type=str, default="data/owt-merges.txt")
+    parser.add_argument("--eot_text", type=str, default="<|endoftext|>")
 
-    # Training data
+    # Data 
     parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
+    parser.add_argument("--preprocessing", type=bool, default=True)
+    
+    # Training parameters
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--betas", type=tuple, default=(0.99, 0.999))
@@ -39,7 +44,7 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0.01)
 
     # checkpoints
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/")
+    parser.add_argument("--checkpoint_dir", type=str, default="logs/checkpoints/")
 
     # parse parameters
     params = parser.parse_args()
@@ -56,68 +61,6 @@ def save_training_checkpoint(model, optim, iteration, checkpoint_path):
     logger.info("Save checkpoint to {path}", path=checkpoint_path)
 
 
-def tokenize_data(params):
-    tokenizer = Tokenizer.from_files(
-        vocab_filepath=params.vocab_filepath,
-        merges_filepath=params.merges_filepath,
-        special_tokens=["<|endoftext|>"]
-    )
-
-    logger.info("Vocab size: {}", len(tokenizer.vocab))
-    params.vocab_size = len(tokenizer.vocab)
-    # load training data
-    with open(params.train_filepath, mode="r", encoding="utf-8") as f:
-        text = ""
-        for line in f:
-            text += line
-
-    EOT_TEXT = "<|endoftext|>"
-    logger.info("EOT_TEXT: {}", EOT_TEXT)
-    EOT_ID = tokenizer.encode(EOT_TEXT)
-    logger.info("EOT_ID: {}", EOT_ID)
-    assert EOT_TEXT == tokenizer.decode(EOT_ID), "EOT_TEXT {EOT_TEXT} is not valid"
-    # do tokenizer to training data
-    token_ids = np.array(tokenizer.encode(text))
-    
-
-
-def make_batches_by_docs(
-    token_ids: Sequence[int],
-    eot_id: int,
-    batch_size: int,
-    context_length: int,
-    device: str = "cpu",
-):
-    data = torch.as_tensor(token_ids, dtype=torch.long)
-
-    # 1) Split documents by eot (discard empty documents)
-    docs = []
-    start = 0
-    for i, tid in enumerate(data):
-        if tid == eot_id:
-            if i - start > 0:
-                docs.append(data[start:i])  # [start, i), excluding eot
-            start = i + 1
-    if start < len(data):
-        docs.append(data[start:])
-
-    # 2) Keep only documents that can produce at least one window
-    docs = [d for d in docs if len(d) >= context_length + 1]
-    assert len(docs) > 0, "No document is long enough for a training window."
-
-    # 3) Randomly sample start positions within documents
-    xs, ys = [], []
-    for _ in range(batch_size):
-        d = docs[np.random.randint(0, len(docs))]
-        s = np.random.randint(0, len(d) - context_length)
-        x = d[s:s+context_length]
-        y = d[s+1:s+context_length+1]
-        xs.append(x)
-        ys.append(y)
-
-    x = torch.stack(xs).to(device)
-    y = torch.stack(ys).to(device)
-    return x, y
 
 
 def train(params):
@@ -208,6 +151,6 @@ if __name__ == "__main__":
     logger.info("Start training")
     log_params(params)
     # train(params)
-    tokenize_data(params=params)
+    dataset = TrainingDataSet(params)
 
 
