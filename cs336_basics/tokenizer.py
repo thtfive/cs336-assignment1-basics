@@ -2,6 +2,8 @@ from typing import Iterator, Iterable, Union
 from cs336_basics.common import write_vocab_to_file, read_vocab_from_file, write_merges_to_file, read_merges_from_file
 import regex as re
 from cs336_basics.train_bpe import PAT
+import torch
+import numpy as np
 
 
 class Tokenizer:
@@ -164,6 +166,13 @@ class Tokenizer:
         """
         Decode a sequence of token IDs into text.
         """
+        if isinstance(ids, torch.Tensor):
+            ids = ids.detach().cpu().tolist()
+        elif isinstance(ids, np.ndarray):
+            ids = ids.tolist()
+        elif not isinstance(ids, list):
+            raise TypeError(f"Unsupported input type: {type(ids)}")
+        
         tokens = [self.id_to_bytes[id] for id in ids]
         text = b"".join(tokens).decode('utf-8', errors='replace')
         return text
