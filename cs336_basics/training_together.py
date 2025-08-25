@@ -53,10 +53,10 @@ def parse_args():
     return params
 
 
-def save_training_checkpoint(model, optim, iteration, checkpoint_path):
+def save_training_checkpoint(model, optimizer, iteration, checkpoint_path):
     save_checkpoint(
         model=model,
-        optimizer=optim,
+        optimizer=optimizer,
         iteration=iteration,
         out=checkpoint_path
     )
@@ -110,11 +110,11 @@ def train(params):
     for i in range(10000):
         iteration = i
         x, targets = next(iter(loader))
+        x = x.to(device)
+        targets = targets.to(device)
         
         optim.zero_grad()
         y = model(x)
-        print("y device: ", y.device)
-        print("targets device: ", targets.device)
         loss = cross_entropy(y, targets)
 
         loss.backward()
@@ -127,7 +127,7 @@ def train(params):
                 model=model,
                 optimizer=optim,
                 iteration=iteration,
-                out=checkpoint_path
+                checkpoint_path=checkpoint_path
             )
 
 
@@ -137,7 +137,7 @@ def train(params):
         model=model,
         optimizer=optim,
         iteration=iteration,
-        out=checkpoint_path
+        checkpoint_path=checkpoint_path
     )
 
 
