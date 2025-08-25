@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0.01)
 
     # checkpoints
-    parser.add_argument("--checkpoint_dir", type=str, default="logs/checkpoints/")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/")
 
     # parse parameters
     params = parser.parse_args()
