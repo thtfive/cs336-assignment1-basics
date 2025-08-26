@@ -171,7 +171,6 @@ def build_or_load(
     train_filepath: str,
     eot_text: str,
     context_length: int,
-    device: str = "cpu",
     force_rebuild: bool = False,
 ) -> TrainingDataSet:
     if (not force_rebuild) and os.path.isfile(pth_path):

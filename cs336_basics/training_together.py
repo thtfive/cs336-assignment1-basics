@@ -39,17 +39,19 @@ def parse_args():
     parser.add_argument("--rope_theta", type=float, default=10000.0)
 
     # Tokenizer parameters
-    parser.add_argument("--vocab_filepath", type=str, default="data/owt-vocab.txt")
-    parser.add_argument("--merges_filepath", type=str, default="data/owt-merges.txt")
+    parser.add_argument("--vocab_filepath", type=str, default="data/TinyStoriesV2-GPT4-vocab.txt")
+    parser.add_argument("--merges_filepath", type=str, default="data/TinyStoriesV2-GPT4-merges.txt")
     parser.add_argument("--eot_text", type=str, default="<|endoftext|>")
 
     # Data 
-    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
+    parser.add_argument("--train_filepath", type=str, default="data/TinyStoriesV2-GPT4-train.txt")
     parser.add_argument("--preprocessing", type=bool, default=True)
-    parser.add_argument("--dataset_path", type=str, default="cache/train_dataset.pth")
+    parser.add_argument("--train_dataset_path", type=str, default="cache/train_dataset.pth")
+    parser.add_argument("--valid_filepath", type=str, default="data/TinyStoriesV2-GPT4-valid.txt")
+    parser.add_argument("--valid_dataset_path", type=str, default="cache/valid_dataset.pth")
     
     # Training parameters
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--betas", type=tuple, default=(0.99, 0.999))
     parser.add_argument("--eps", type=float, default=1e-8)
@@ -84,6 +86,25 @@ def format_param_count(num_params):
         return f"{num_params / 1e3:.2f}K"
     else:
       return f"{num_params}"
+
+
+def eval_model(model, data_loader, iteration):
+    model.eval()
+    total_loss = 0.0
+    logger.info("Start Step {i} Validation...", i=iteration)
+    with torch.no_grad():
+        for batch in data_loader:
+            inputs, targets = batch
+            outputs = model(inputs)
+            loss = loss_fn(outputs, targets)
+            total_loss += loss.item()
+    avg_loss = total_loss / len(data_loader)
+    logger.info("Step {i}, Validation Loss:{loss:.4f}", i=iteration, loss=avg_loss)
+    wandb.log({"step_validation_loss": loss.item()}, step=iteration)
+
+
+def loss_fn(inputs, targets):
+    return cross_entropy(inputs=inputs, targets=targets)
 
 
 def train(params):
@@ -123,15 +144,24 @@ def train(params):
 
     # load training data
     train_dataset = build_or_load(
-        pth_path=params.dataset_path,
+        pth_path=params.train_dataset_path,
         vocab_filepath=params.vocab_filepath,
         merges_filepath=params.merges_filepath,
         train_filepath=params.train_filepath,
         eot_text=params.eot_text,
         context_length=params.context_length,
-        device=device
     )
-    loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, num_workers=params.num_workers)
+    train_data_loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, num_workers=params.num_workers)
+    # load valid data
+    valid_dataset = build_or_load(
+        pth_path=params.valid_dataset_path,
+        vocab_filepath=params.vocab_filepath,
+        merges_filepath=params.merges_filepath,
+        train_filepath=params.valid_filepath,
+        eot_text=params.eot_text,
+        context_length=params.context_length,
+    )
+    valid_data_loader = DataLoader(valid_dataset, batch_size=params.batch_size, shuffle=False, num_workers=params.num_workers)
 
     # training
     optim = AdamW(
@@ -144,13 +174,13 @@ def train(params):
 
     iteration = 0
     for iteration in range(10000):
-        x, targets = next(iter(loader))
+        x, targets = next(iter(train_data_loader))
         x = x.to(device)
         targets = targets.to(device)
         
         optim.zero_grad()
         y = model(x)
-        loss = cross_entropy(y, targets)
+        loss = loss_fn(y, targets)
 
         loss.backward()
         optim.step()
@@ -158,6 +188,7 @@ def train(params):
             logger.info("Step {i}, Loss:{loss:.4f}", i=iteration, loss=loss.item())
             wandb.log({"step_loss": loss.item()}, step=iteration)
         if iteration % 1000 == 0:
+            eval_model(model, valid_data_loader, iteration)
             checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=iteration)
             save_training_checkpoint(
                 model=model,
