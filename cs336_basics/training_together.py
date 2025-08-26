@@ -107,8 +107,7 @@ def train(params):
     )
 
     iteration = 0
-    for i in range(10000):
-        iteration = i
+    for iteration in range(10000):
         x, targets = next(iter(loader))
         x = x.to(device)
         targets = targets.to(device)
@@ -119,9 +118,9 @@ def train(params):
 
         loss.backward()
         optim.step()
-        if i % 10 == 0:
+        if iteration % 10 == 0:
             logger.info("Step {i}, Loss:{loss:.4f}", i=i, loss=loss.item())
-        if i % 1000 == 0:
+        if iteration % 1000 == 0:
             checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=iteration)
             save_training_checkpoint(
                 model=model,
@@ -132,7 +131,7 @@ def train(params):
 
 
     # save checkpoint
-    checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=100)
+    checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=iteration)
     save_training_checkpoint(
         model=model,
         optimizer=optim,
