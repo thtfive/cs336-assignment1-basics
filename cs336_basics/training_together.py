@@ -14,6 +14,11 @@ from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.checkpointing import save_checkpoint, load_checkpoint
 from cs336_basics.data_loader import TrainingDataSet, build_or_load
 from torch.utils.data import Dataset, DataLoader
+import wandb
+import os
+
+wandb_api_key = os.environ["WANDB_API_KEY"]
+wandb.login(key=wandb_api_key)
 
 def parse_args():
     # parse parameters
@@ -73,6 +78,18 @@ def train(params):
     params.vocab_size = len(tokenizer.vocab)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    wandb.init(
+        project="cs336-project",  # Project name (required, will create or reuse this project in W&B)
+        name="training-gpt",     # Experiment name (optional, random name will be generated if not set)
+        config={                # Record hyperparameters (dictionary format)
+            "learning_rate": params.lr,
+            "architecture": "Transformer+PreNorm+RoPE",
+            "dataset": "tiny-stories",
+            "epochs": 1,
+            "batch_size": params.batch_size,
+        }
+    )
+
     # load model
     model = TransformerLM(
         vocab_size = params.vocab_size,
@@ -84,6 +101,7 @@ def train(params):
         rope_theta = params.rope_theta
     )
     model.to(device)
+    wandb.watch(model, log="all", log_freq=10)
 
     # load training data
     train_dataset = build_or_load(
@@ -119,7 +137,8 @@ def train(params):
         loss.backward()
         optim.step()
         if iteration % 10 == 0:
-            logger.info("Step {i}, Loss:{loss:.4f}", i=i, loss=loss.item())
+            logger.info("Step {i}, Loss:{loss:.4f}", i=iteration, loss=loss.item())
+            wandb.log({"step_loss": loss.item()}, step=iteration)
         if iteration % 1000 == 0:
             checkpoint_path = params.checkpoint_dir + "model_step{step}.pth".format(step=iteration)
             save_training_checkpoint(
@@ -138,6 +157,8 @@ def train(params):
         iteration=iteration,
         checkpoint_path=checkpoint_path
     )
+    wandb.save("model_final.pth")
+    wandb.finish()
 
 
 def log_params(params):
