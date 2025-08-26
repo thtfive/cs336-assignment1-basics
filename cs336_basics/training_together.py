@@ -143,6 +143,7 @@ def train(params):
     logger.info(f"Total trainable params: {trainable_params}")
 
     # load training data
+    logger.info("Start build or load train data...")
     train_dataset = build_or_load(
         pth_path=params.train_dataset_path,
         vocab_filepath=params.vocab_filepath,
@@ -151,8 +152,13 @@ def train(params):
         eot_text=params.eot_text,
         context_length=params.context_length,
     )
+    logger.info("Complete build or load train data.")
+    logger.info("Creating data loader for train data...")
     train_data_loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, num_workers=params.num_workers)
-    # load valid data
+    logger.info("Complete creating data loader for train data, train data size: {}", len(train_data_loader))
+
+    logger.info("Start build or load validation data...")
+    # load validation data
     valid_dataset = build_or_load(
         pth_path=params.valid_dataset_path,
         vocab_filepath=params.vocab_filepath,
@@ -161,7 +167,10 @@ def train(params):
         eot_text=params.eot_text,
         context_length=params.context_length,
     )
+    logger.info("Complete build or load validation data.")
+    logger.info("Creating data loader for validation data...")
     valid_data_loader = DataLoader(valid_dataset, batch_size=params.batch_size, shuffle=False, num_workers=params.num_workers)
+    logger.info("Complete creating data loader for validation data, validation data size: {}", len(valid_data_loader))
 
     # training
     optim = AdamW(
