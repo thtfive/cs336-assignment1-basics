@@ -54,6 +54,7 @@ def parse_args():
     parser.add_argument("--betas", type=tuple, default=(0.99, 0.999))
     parser.add_argument("--eps", type=float, default=1e-8)
     parser.add_argument("--weight_decay", type=float, default=0.01)
+    parser.add_argument("--num_workers", type=int, default=1)
 
     # checkpoints
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/")
@@ -101,8 +102,6 @@ def train(params):
         name=run_name,     # Experiment name (optional, random name will be generated if not set)
         config=vars(params),                # Record hyperparameters (dictionary format)
     )
-    wandb.finish()
-    wandb.init(mode="disabled")
 
     # load model
     model = TransformerLM(
@@ -132,7 +131,7 @@ def train(params):
         context_length=params.context_length,
         device=device
     )
-    loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=2)
+    loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, num_workers=params.num_workers)
 
     # training
     optim = AdamW(
