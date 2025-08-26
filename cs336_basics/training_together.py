@@ -27,7 +27,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train TransformerLM')
 
     # Experiment name
-    parser = argparse.add_argument("--exp_name", type=str, default="train gpt")
+    parser.add_argument("--exp_name", type=str, default="train gpt")
 
     # TransformLM model parameters
     parser.add_argument("--vocab_size", type=int, default=10000)
