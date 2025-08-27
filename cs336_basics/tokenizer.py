@@ -4,7 +4,10 @@ import regex as re
 from cs336_basics.train_bpe import PAT
 import torch
 import numpy as np
-
+from cs336_basics.log_setup import get_logger
+logger = get_logger(__name__)
+import cProfile
+import pstats
 
 class Tokenizer:
     def __init__(self, vocab, merges, special_tokens=None):
@@ -51,26 +54,37 @@ class Tokenizer:
         return cls(vocab, merges, special_tokens)
 
 
-    def tokenize_special_tokens(self, text)->list[Union[str, int]]:
-        results = [text]
+    def tokenize_special_tokens(self, text) -> list[Union[str, int]]:
+        # Precompile regex patterns and decode tokens in advance
+        patterns = []
+        replacements = {}
+        
         for special_token in self.special_tokens_to_id.keys():
-            new_results = []
             token_str = special_token.decode('utf-8')
-            for elem in results:
-                if isinstance(elem, str):
-                    while elem.find(token_str) != -1:
-                        idx = elem.find(token_str)
-                        if idx > 0:
-                            new_results.append(elem[:idx])
-                        new_results.append(self.special_tokens_to_id[special_token])
-                        elem = elem[idx + len(token_str):]
-                    if elem:
-                        new_results.append(elem)
-                elif isinstance(elem, int):
-                    new_results.append(elem)
-                else:
-                    raise ValueError(f"Unexpected type {type(elem)} in results.")
-            results = new_results
+            patterns.append(re.escape(token_str))
+            replacements[token_str] = self.special_tokens_to_id[special_token]
+        
+        # Create regex pattern to match all special tokens
+        pattern = re.compile('|'.join(patterns))
+        
+        results = []
+        last_end = 0
+        
+        # Use finditer to avoid repeated searching
+        for match in pattern.finditer(text):
+            # Add regular text before the match
+            if match.start() > last_end:
+                results.append(text[last_end:match.start()])
+            
+            # Add special token ID
+            matched_text = match.group()
+            results.append(replacements[matched_text])
+            last_end = match.end()
+        
+        # Add remaining text
+        if last_end < len(text):
+            results.append(text[last_end:])
+        
         return results
   
 
@@ -188,5 +202,49 @@ def test_encode():
     assert results == [1, 2, 3, 5, 2, 3, 0]
 
 
+def tokenize_data(
+    vocab_filepath:str,
+    merges_filepath: str,
+    train_filepath: str,
+    eot_text: str,
+):
+    tokenizer = Tokenizer.from_files(
+        vocab_filepath=vocab_filepath,
+        merges_filepath=merges_filepath,
+        special_tokens=[eot_text]
+    )
+    # load training data
+    text = ""
+    with open(train_filepath, mode="r", encoding="utf-8") as f:
+        lines = f.readlines()
+        text = "".join(lines)
+
+    # sanity check on eot_text
+    logger.info("EOT_TEXT: {}", eot_text)
+    eot_id = tokenizer.encode(eot_text)[0]
+    logger.info("EOT_ID: {}", eot_id)
+    assert eot_text == tokenizer.decode([eot_id]), "EOT_TEXT {EOT_TEXT} is not valid"
+
+    # do tokenizer to training data
+    token_ids = np.array(tokenizer.encode(text))
+    token_ids = torch.as_tensor(token_ids, dtype=torch.long, device="cpu")
+    return token_ids, eot_id
+
+
+def test_encode_perf():
+    profiler = cProfile.Profile()
+    profiler.enable()
+    tokenize_data(
+        vocab_filepath="data/TinyStoriesV2-GPT4-vocab.txt",
+        merges_filepath="data/TinyStoriesV2-GPT4-merges.txt",
+        train_filepath="data/TinyStoriesV2-GPT4-valid.txt",
+        eot_text="<|endoftext|>"
+    )
+    profiler.disable()
+    stats = pstats.Stats(profiler)
+    stats.sort_stats(pstats.SortKey.TIME)  # 按耗时排序
+    stats.print_stats(10)  # 显示前10个最耗时的函数
+
+
 if __name__ == "__main__":
-    test_encode()
+    test_encode_perf()
