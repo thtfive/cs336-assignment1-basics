@@ -4,6 +4,7 @@ import regex as re
 from cs336_basics.train_bpe import PAT
 import torch
 import numpy as np
+from functools import lru_cache
 import cProfile
 import pstats
 
@@ -36,6 +37,7 @@ class Tokenizer:
         self.special_tokens_to_id = {}
         for token in sorted([token.encode('utf-8') for token in special_tokens], key=lambda x: len(x), reverse=True):
             self.special_tokens_to_id[token] = self.bytes_to_id[token]
+            
     
 
     @classmethod
@@ -104,7 +106,8 @@ class Tokenizer:
         return tuple(result)
 
 
-    def tokenize_word(self, word:str) -> list[int]:
+    @lru_cache(maxsize=100000)
+    def tokenize_word(self, word: str) -> list[int]:
         word_bytes = [bytes([x]) for x in word.encode('utf-8')]
 
         while True:
@@ -121,6 +124,7 @@ class Tokenizer:
                 word_bytes = self.merge_key(word_bytes, best_pair)
             else:
                 break
+
         token_ids = [self.bytes_to_id[byte] for byte in word_bytes]
         return token_ids
 
