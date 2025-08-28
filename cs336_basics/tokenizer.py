@@ -4,8 +4,6 @@ import regex as re
 from cs336_basics.train_bpe import PAT
 import torch
 import numpy as np
-from cs336_basics.log_setup import get_logger
-logger = get_logger(__name__)
 import cProfile
 import pstats
 
@@ -219,10 +217,7 @@ def tokenize_data(
         lines = f.readlines()
         text = "".join(lines)
 
-    # sanity check on eot_text
-    logger.info("EOT_TEXT: {}", eot_text)
     eot_id = tokenizer.encode(eot_text)[0]
-    logger.info("EOT_ID: {}", eot_id)
     assert eot_text == tokenizer.decode([eot_id]), "EOT_TEXT {EOT_TEXT} is not valid"
 
     # do tokenizer to training data
