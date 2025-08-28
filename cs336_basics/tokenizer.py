@@ -208,7 +208,7 @@ def test_encode():
     assert results == [1, 2, 3, 5, 2, 3, 0]
 
 
-def process_segment_file_to_tokens(params) -> dict[tuple[bytes, ...], int]:
+def process_segment_file_to_tokens(params) -> list[int]:
     """
     Read a segment of the file and encode
     """
@@ -224,25 +224,17 @@ def process_segment_file_to_tokens(params) -> dict[tuple[bytes, ...], int]:
 
 
 def process_file_to_tokens_parallel(
-    vocab_filepath:str,
-    merges_filepath: str,
-    train_filepath: str,
-    eot_text: str,
-):
-    tokenizer = Tokenizer.from_files(
-        vocab_filepath=vocab_filepath,
-        merges_filepath=merges_filepath,
-        special_tokens=[eot_text]
-    )
-
+    tokenizer: Tokenizer,
+    input_filepath: str,
+) -> list[int]:
     boundaries = []
-    with open(train_filepath, "rb") as f:
+    with open(input_filepath, "rb") as f:
         num_processes = mp.cpu_count()
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
     tasks = [
         {
-            "file_name": train_filepath, 
+            "file_name": input_filepath,
             "start": boundaries[i],
             "end": boundaries[i+1],
             "tokenizer": tokenizer
@@ -260,23 +252,14 @@ def process_file_to_tokens_parallel(
 
 
 def process_file_to_tokens_sequential(
-    vocab_filepath:str,
-    merges_filepath: str,
-    train_filepath: str,
-    eot_text: str,
-):
-    tokenizer = Tokenizer.from_files(
-        vocab_filepath=vocab_filepath,
-        merges_filepath=merges_filepath,
-        special_tokens=[eot_text]
-    )
+    tokenizer: Tokenizer,
+    input_filepath: str,
+) -> list[int]:
     # load training data
     text = ""
-    with open(train_filepath, mode="r", encoding="utf-8") as f:
+    with open(input_filepath, mode="r", encoding="utf-8") as f:
         lines = f.readlines()
         text = "".join(lines)
-    eot_id = tokenizer.encode(eot_text)[0]
-    assert eot_text == tokenizer.decode([eot_id]), "EOT_TEXT {EOT_TEXT} is not valid"
 
     # do tokenizer to training data
     token_ids = tokenizer.encode(text)
@@ -286,24 +269,29 @@ def process_file_to_tokens_sequential(
 def test_process_file_to_tokens_perf():
     vocab_filepath="data/TinyStoriesV2-GPT4-vocab.txt"
     merges_filepath="data/TinyStoriesV2-GPT4-merges.txt"
-    train_filepath="data/TinyStoriesV2-GPT4-valid.txt"
+    input_filepath="data/TinyStoriesV2-GPT4-valid.txt"
     eot_text = "<|endoftext|>"
-    start_time = time.time()
-    sequential_result = process_file_to_tokens_sequential(
+
+    # initialize tokenizer
+    tokenizer = Tokenizer.from_files(
         vocab_filepath=vocab_filepath,
         merges_filepath=merges_filepath,
-        train_filepath=train_filepath,
-        eot_text=eot_text
+        special_tokens=[eot_text]
+    )
+
+    # sequential process
+    start_time = time.time()
+    sequential_result = process_file_to_tokens_sequential(
+        tokenizer=tokenizer,
+        input_filepath=input_filepath,
     )
     print(f"sequential processing time: {time.time() - start_time:.3f}s")
 
-    # parallel
+    # parallel process
     start_time = time.time()
     parallel_result = process_file_to_tokens_parallel(
-        vocab_filepath=vocab_filepath,
-        merges_filepath=merges_filepath,
-        train_filepath=train_filepath,
-        eot_text=eot_text
+        tokenizer=tokenizer,
+        input_filepath=input_filepath,
     )
     print(f"parallel processing time: {time.time() - start_time:.3f}s")
     
