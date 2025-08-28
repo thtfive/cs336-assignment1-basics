@@ -19,6 +19,7 @@ class Tokenizer:
         """
         self.merges_dict = {t : i for i, t in enumerate(merges)}
         self.vocab = vocab
+        self.vocab_size = len(self.vocab)
 
         special_tokens = special_tokens if special_tokens is not None else []
         for token in special_tokens:
@@ -105,10 +106,10 @@ class Tokenizer:
 
     def tokenize_word(self, word:str) -> list[int]:
         word_bytes = [bytes([x]) for x in word.encode('utf-8')]
-        
+
         while True:
             merged = False
-            rank = len(self.merges_dict)
+            rank = self.vocab_size
             best_pair = None
             for i in range(len(word_bytes) - 1):
                 pair = (word_bytes[i], word_bytes[i + 1])
@@ -229,18 +230,18 @@ def tokenize_data(
 
 
 def test_encode_perf():
-    profiler = cProfile.Profile()
-    profiler.enable()
+    # profiler = cProfile.Profile()
+    # profiler.enable()
     tokenize_data(
         vocab_filepath="data/TinyStoriesV2-GPT4-vocab.txt",
         merges_filepath="data/TinyStoriesV2-GPT4-merges.txt",
         train_filepath="data/TinyStoriesV2-GPT4-valid.txt",
         eot_text="<|endoftext|>"
     )
-    profiler.disable()
-    stats = pstats.Stats(profiler)
-    stats.sort_stats(pstats.SortKey.TIME)  # 按耗时排序
-    stats.print_stats(10)  # 显示前10个最耗时的函数
+    # profiler.disable()
+    # stats = pstats.Stats(profiler)
+    # stats.sort_stats(pstats.SortKey.TIME)  # 按耗时排序
+    # stats.print_stats(10)  # 显示前10个最耗时的函数
 
 
 if __name__ == "__main__":
