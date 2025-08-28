@@ -62,6 +62,8 @@ class Tokenizer:
             patterns.append(re.escape(token_str))
             replacements[token_str] = self.special_tokens_to_id[special_token]
         
+        if len(patterns) == 0:
+            return [text]
         # Create regex pattern to match all special tokens
         pattern = re.compile('|'.join(patterns))
         
