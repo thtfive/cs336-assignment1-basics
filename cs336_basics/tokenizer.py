@@ -5,8 +5,9 @@ from cs336_basics.train_bpe import PAT
 import torch
 import numpy as np
 from functools import lru_cache
-import cProfile
-import pstats
+from cs336_basics.common import find_chunk_boundaries
+import multiprocessing as mp
+import time
 
 class Tokenizer:
     def __init__(self, vocab, merges, special_tokens=None):
@@ -207,7 +208,58 @@ def test_encode():
     assert results == [1, 2, 3, 5, 2, 3, 0]
 
 
-def tokenize_data(
+def process_segment_file_to_tokens(params) -> dict[tuple[bytes, ...], int]:
+    """
+    Read a segment of the file and encode
+    """
+    file_name = params['file_name']
+    start = params['start']
+    end = params['end']
+    tokenizer = params['tokenizer']
+    with open(file_name, "rb") as f:
+        f.seek(start)
+        chunk = f.read(end - start).decode(encoding="utf-8", errors="ignore")
+
+    return tokenizer.encode(chunk)
+
+
+def process_file_to_tokens_parallel(
+    vocab_filepath:str,
+    merges_filepath: str,
+    train_filepath: str,
+    eot_text: str,
+):
+    tokenizer = Tokenizer.from_files(
+        vocab_filepath=vocab_filepath,
+        merges_filepath=merges_filepath,
+        special_tokens=[eot_text]
+    )
+
+    boundaries = []
+    with open(train_filepath, "rb") as f:
+        num_processes = mp.cpu_count()
+        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+
+    tasks = [
+        {
+            "file_name": train_filepath, 
+            "start": boundaries[i],
+            "end": boundaries[i+1],
+            "tokenizer": tokenizer
+        }
+        for i in range(len(boundaries) - 1)
+    ]
+
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        results = pool.map(process_segment_file_to_tokens, tasks)
+    token_ids = []
+    for result in results:
+        token_ids.extend(result)
+
+    return token_ids
+
+
+def process_file_to_tokens_sequential(
     vocab_filepath:str,
     merges_filepath: str,
     train_filepath: str,
@@ -223,30 +275,40 @@ def tokenize_data(
     with open(train_filepath, mode="r", encoding="utf-8") as f:
         lines = f.readlines()
         text = "".join(lines)
-
     eot_id = tokenizer.encode(eot_text)[0]
     assert eot_text == tokenizer.decode([eot_id]), "EOT_TEXT {EOT_TEXT} is not valid"
 
     # do tokenizer to training data
-    token_ids = np.array(tokenizer.encode(text))
-    token_ids = torch.as_tensor(token_ids, dtype=torch.long, device="cpu")
-    return token_ids, eot_id
+    token_ids = tokenizer.encode(text)
+    return token_ids
 
 
-def test_encode_perf():
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-    tokenize_data(
-        vocab_filepath="data/TinyStoriesV2-GPT4-vocab.txt",
-        merges_filepath="data/TinyStoriesV2-GPT4-merges.txt",
-        train_filepath="data/TinyStoriesV2-GPT4-valid.txt",
-        eot_text="<|endoftext|>"
+def test_process_file_to_tokens_perf():
+    vocab_filepath="data/TinyStoriesV2-GPT4-vocab.txt"
+    merges_filepath="data/TinyStoriesV2-GPT4-merges.txt"
+    train_filepath="data/TinyStoriesV2-GPT4-valid.txt"
+    eot_text = "<|endoftext|>"
+    start_time = time.time()
+    sequential_result = process_file_to_tokens_sequential(
+        vocab_filepath=vocab_filepath,
+        merges_filepath=merges_filepath,
+        train_filepath=train_filepath,
+        eot_text=eot_text
     )
-    # profiler.disable()
-    # stats = pstats.Stats(profiler)
-    # stats.sort_stats(pstats.SortKey.TIME)  # 按耗时排序
-    # stats.print_stats(10)  # 显示前10个最耗时的函数
+    print(f"sequential processing time: {time.time() - start_time:.3f}s")
+
+    # parallel
+    start_time = time.time()
+    parallel_result = process_file_to_tokens_parallel(
+        vocab_filepath=vocab_filepath,
+        merges_filepath=merges_filepath,
+        train_filepath=train_filepath,
+        eot_text=eot_text
+    )
+    print(f"parallel processing time: {time.time() - start_time:.3f}s")
+    
+    assert sequential_result == parallel_result
 
 
 if __name__ == "__main__":
-    test_encode_perf()
+    test_process_file_to_tokens_perf()
