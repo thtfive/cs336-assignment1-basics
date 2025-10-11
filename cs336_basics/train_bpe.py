@@ -6,6 +6,7 @@ from cs336_basics.common import write_vocab_to_file, read_vocab_from_file, write
 from tests.common import FIXTURES_PATH
 import time
 import multiprocessing as mp
+from heapq import nlargest
 
 def find_chunk_boundaries(
     file: BinaryIO, 
@@ -70,12 +71,13 @@ def merge_key(key: tuple[bytes], bytes_pair: tuple[bytes, bytes], new_bytes: byt
     return tuple(result)
 
 
-def update_word_counts(word_counts: dict[tuple[bytes, ...], int], bytes_pair: tuple[bytes, bytes], bytes_pair_counts: Counter, 
-                       bytes_pair_to_words: dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]) -> None:
+def update_word_counts(
+    word_counts: dict[tuple[bytes, ...], int],
+    bytes_pair: tuple[bytes, bytes],
+    bytes_pair_counts: Counter,
+    bytes_pair_to_words: dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]
+) -> None:
     new_bytes = bytes_pair[0] + bytes_pair[1]
-    bytes_pair_to_words[new_bytes] = []
-    # print("bytes pair:", bytes_pair)
-    # print(f"bytes pair count: ", bytes_pair_counts[bytes_pair])
 
     old_word_list = bytes_pair_to_words[bytes_pair].copy()
     for old_word in old_word_list:
@@ -96,8 +98,6 @@ def update_word_counts(word_counts: dict[tuple[bytes, ...], int], bytes_pair: tu
             bytes_pair_to_words[pair].add(new_word)
         # update the word counts
         word_counts[new_word] = word_counts.pop(old_word)
-    # print(f"bytes pair count: ", bytes_pair_counts[bytes_pair])
-    # print("-"*80)
     
 
 def get_bytes_pair_data(word_counts: dict[tuple[bytes, ...], int]
@@ -176,7 +176,12 @@ def train_bpe(input_path:str, vocab_size:int, special_tokens:list[str]) -> tuple
     bytes_pair_counts, bytes_pair_to_words = get_bytes_pair_data(word_counts)
     while len(vocab) < vocab_size:
         # find the most freq tuple
-        best_tuple = max(bytes_pair_counts.items(), key = lambda x: (x[1], x[0]))[0]
+        best_tuple = None
+        best_cnt = -1
+        for pair, cnt in bytes_pair_counts.items():
+            if cnt > best_cnt or (cnt == best_cnt and (best_tuple is None or pair > best_tuple)):
+                best_cnt = cnt
+                best_tuple = pair
         merged_tuples.append(best_tuple)
         # update vocab
         vocab[len(vocab)] = best_tuple[0] + best_tuple[1]
