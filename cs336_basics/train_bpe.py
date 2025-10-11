@@ -182,7 +182,6 @@ def build_bytes_pair_to_words_dict(
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 def train_bpe(input_path:str, vocab_size:int, special_tokens:list[str]) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     num_processes = mp.cpu_count()
-    print(f"Using {num_processes} processes for training BPE.")
     vocab = {}
     for token in special_tokens:
         vocab[len(vocab)] = token.encode('utf-8')
@@ -192,13 +191,11 @@ def train_bpe(input_path:str, vocab_size:int, special_tokens:list[str]) -> tuple
     with open(input_path, "rb") as f:
         boundaries = find_chunk_boundaries(
             f, num_processes, "<|endoftext|>".encode("utf-8"))
-        print(f"Chunk boundaries: {boundaries}")
-    
+
     with mp.Pool(processes=mp.cpu_count()) as pool:
         tasks = [{'file_name': input_path, 'start': boundaries[i], 'end': boundaries[i+1], 'special_tokens': special_tokens} for i in range(len(boundaries)-1)]
         word_counts_list = pool.map(preprocess_segment, tasks)
     word_counts = merge_word_counts(word_counts_list)
-    print(f"Total unique words: {len(word_counts)}")    
     # merge until size of vocab reach vocab_size
     merged_tuples = []
     bytes_pair_counts = get_bytes_pair_counts(word_counts)
